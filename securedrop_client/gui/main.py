@@ -148,6 +148,7 @@ class Window(QMainWindow):
         TODO: Finish this...
         """
         conversation = ConversationView(self)
+        conversation.setup(self.controller)
         conversation.add_message('Source name: {}'.format(
                                  source.journalist_designation))
         conversation.add_message('Hello, hello, is this thing switched on?')
