@@ -122,7 +122,7 @@ class Client(QObject):
         self.sync_timer.timeout.connect(self.update_sync)
         self.sync_timer.start(30000)
 
-    def call_api(self, function, callback, timeout, *args, **kwargs):
+    def call_api(self, function, callback, timeout, *args, current_object=None, **kwargs):
         """
         Calls the function in a non-blocking manner. Upon completion calls the
         callback with the result. Calls timeout if the API call emits a
@@ -133,8 +133,12 @@ class Client(QObject):
             self.api_thread = QThread(self.gui)
             self.api_runner = APICallRunner(function, *args, **kwargs)
             self.api_runner.moveToThread(self.api_thread)
-            self.api_runner.call_finished.connect(callback)
-            self.api_runner.timeout.connect(timeout)
+            if not current_object:
+                self.api_runner.call_finished.connect(callback)
+                self.api_runner.timeout.connect(timeout)
+            else:  # We need to pass back the current object for cleanup
+                self.api_runner.call_finished.connect(lambda: callback(result, current_object))
+                self.api_runner.timeout.connect(lambda: timeout(result, current_object))
             self.finish_api_call.connect(self.api_runner.on_cancel_timeout)
             self.api_thread.started.connect(self.api_runner.call_api)
             self.api_thread.finished.connect(self.call_reset)
@@ -193,12 +197,15 @@ class Client(QObject):
         error = _('You must login to perform this action.')
         self.gui.update_error_status(error)
 
-    def on_sidebar_action_timeout(self):
+    def on_star_action_timeout(self, source_db_object):
         """
-        Indicate that a timeout occurred for an action occuring in the left
-        sidebar.
+        Rollback UI change and indicate in the left sidebar status bar that
+        an error occurred.
         """
-        error = _('The connection to SecureDrop timed out. Please try again.')
+        source_db_object = storage.toggle_source_star(source_db_object, 
+                                                      self.session)
+        self.update_sources()
+        error = _('The connection to SecureDrop timed out. Please try starring again.')
         self.gui.update_error_status(error)
 
     def authenticated(self):
@@ -262,27 +269,27 @@ class Client(QObject):
         self.gui.show_sources(sources)
         self.update_sync()
 
-    def on_update_star_complete(self, result):
+    def on_update_star_complete(self, result, source_db_object):
         """
         After we star or unstar a source, we should sync the API
         such that the local database is updated.
-
-        TODO: Improve the push to server sync logic.
         """
         self.call_reset()
-        if result:
-            self.sync_api()  # Syncing the API also updates the source list UI
+        if result:  # Then the UI change can stay.
             self.gui.update_error_status("")
         else:
-            # Here we need some kind of retry logic.
-            logging.info("failed to push change to server")
+            # Revert UI change by deleting source locally.
+            storage.toggle_source_star(source_db_object, self.session)
             error = _('Failed to apply change.')
-            self.gui.update_error_status(error)
+            self.update_sources()
+            self.gui.update_error_status(error)  # Report error to user.
+    
+        self.sync_api()  # Sync the API in case the source was deleted.
 
     def update_star(self, source_db_object):
         """
-        Star or unstar. The callback here is the API sync as we first make sure
-        that we apply the change to the server, and then update locally.
+        Star or unstar. The callback here is the API sync as we first apply the
+        change locally for rapid user feedback, and then push to the server.
         """
         if not self.api:  # Then we should tell the user they need to login.
             self.on_action_requiring_login()
@@ -292,12 +299,20 @@ class Client(QObject):
 
         source_sdk_object = sdclientapi.Source(uuid=source_db_object.uuid)
 
+        # Toggle source star locally and reflect the change in the UI.
+        source_db_object = storage.toggle_source_star(source_db_object, 
+                                                      self.session)
+        self.update_sources()
+
+        # Now apply the local change on the server.
         if source_db_object.is_starred:
-            self.call_api(self.api.remove_star, self.on_update_star_complete,
-                          self.on_sidebar_action_timeout, source_sdk_object)
-        else:
             self.call_api(self.api.add_star, self.on_update_star_complete,
-                          self.on_sidebar_action_timeout, source_sdk_object)
+                          self.on_star_action_timeout, source_sdk_object, 
+                          current_object=source_db_object)
+        else:
+            self.call_api(self.api.remove_star, self.on_update_star_complete,
+                          self.on_star_action_timeout, source_sdk_object,
+                          current_object=source_db_object)
 
     def logout(self):
         """

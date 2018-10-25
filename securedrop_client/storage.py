@@ -234,3 +234,16 @@ def find_or_create_user(uuid, username, session):
         session.add(new_user)
         session.commit()
         return new_user
+
+
+def toggle_source_star(source, session):
+    """
+    If a source star is False, toggle it to True and vice versa.
+    """
+    if source.is_starred:
+        source.is_starred = False
+    else:
+        source.is_starred = True
+    session.add(source)
+    session.commit()
+    return source
