@@ -334,8 +334,8 @@ class Client(QObject):
             # Handle journalist's replies.
             func = self.api.download_reply
             sdk_object = sdclientapi.Reply(uuid=message.uuid)
-            sdk_object.filename = message.filename  # pragma: no cover
-            sdk_object.source_uuid = source_db_object.uuid  # pragma: no cover
+            sdk_object.filename = message.filename
+            sdk_object.source_uuid = source_db_object.uuid
         self.call_api(func, self.on_file_download,
                       self.on_download_timeout, sdk_object, self.data_dir,
                       current_object=message)

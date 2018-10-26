@@ -646,9 +646,6 @@ def test_Client_on_download_timeout(safe_tmpdir):
         "Connection to server timed out, please try again.")
 
 
-# This can be unfailed when this SDK change is merged and released:
-# https://github.com/freedomofpress/securedrop-sdk/pull/32
-@pytest.mark.xfail(reason="needs SDK change merged")
 def test_Client_on_file_click_Reply(safe_tmpdir):
     """
     If the handler is passed a reply, check the download_reply
@@ -664,8 +661,12 @@ def test_Client_on_file_click_Reply(safe_tmpdir):
                          'my-reply.gpg', 123)  # Not a sdclientapi.Submission
     cl.call_api = mock.MagicMock()
     cl.api = mock.MagicMock()
-    cl.on_file_click(source, reply)
+    reply_sdk_object = mock.MagicMock()
+    with mock.patch('sdclientapi.Reply') as mock_reply:
+        mock_reply.return_value = reply_sdk_object
+        cl.on_file_click(source, reply)
     cl.call_api.assert_called_once_with(cl.api.download_reply,
                                         cl.on_file_download,
-                                        cl.on_download_timeout, reply,
-                                        cl.data_dir)
+                                        cl.on_download_timeout,
+                                        reply_sdk_object,
+                                        cl.data_dir, current_object=reply)
