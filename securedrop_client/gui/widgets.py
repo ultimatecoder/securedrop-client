@@ -422,9 +422,11 @@ class ReplyBoxWidget(QWidget):
 
     def setup(self, conversation) -> None:
         self.conversation = conversation
+        self.controller = self.conversation.controller
 
     def send_reply(self) -> None:
-        self.conversation.add_reply(self.text_edit.toPlainText())
+        self.controller.on_reply_send(self.conversation.source,
+                                      self.text_edit.toPlainText())
         self.text_edit.clear()
 
 
@@ -447,6 +449,7 @@ class ConversationView(QWidget):
         scroll.setWidgetResizable(True)
 
         self.reply_box = ReplyBoxWidget()
+        self.source = None
 
         main_layout = QVBoxLayout()
         main_layout.addWidget(scroll, 10)

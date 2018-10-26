@@ -122,7 +122,8 @@ class Client(QObject):
         self.sync_timer.timeout.connect(self.update_sync)
         self.sync_timer.start(30000)
 
-    def call_api(self, function, callback, timeout, *args, **kwargs):
+    def call_api(self, function, callback, timeout, *args, current_object=None,
+                 **kwargs):
         """
         Calls the function in a non-blocking manner. Upon completion calls the
         callback with the result. Calls timeout if the API call emits a
@@ -135,6 +136,7 @@ class Client(QObject):
             self.api_runner.moveToThread(self.api_thread)
             self.api_runner.call_finished.connect(callback)
             self.api_runner.timeout.connect(timeout)
+            self.api_runner.current_object = current_object
             self.finish_api_call.connect(self.api_runner.on_cancel_timeout)
             self.api_thread.started.connect(self.api_runner.call_api)
             self.api_thread.finished.connect(self.call_reset)
@@ -258,3 +260,53 @@ class Client(QObject):
         duration.
         """
         self.gui.set_status(message, duration)
+
+    def on_reply_send(self, source_db_object, reply_text):
+        # Redraw UI
+        self.gui.show_conversation_for(self.gui.current_source)
+
+        # Add reply to the database and store on disk
+        # (below function needs to be written)
+        reply = self.storage.add_reply(session, source_db_object,
+                                       reply_text)
+
+        source_sdk_object = sdclientapi.Source(uuid=source_db_object.uuid)
+
+        # Now encrypt for sending to the server.
+        encrypted_reply = 'this is where the encrypted reply text will go'
+
+        self.call_api(self.api.reply_source, self.on_reply_send_complete,
+                      self.on_reply_timeout, source_sdk_object,
+                      encrypted_reply, current_object=reply)
+
+    def on_reply_send_complete(self, result):
+        """
+        When the reply API call is complete, we call here.
+        """
+        reply = self.api_runner.current_object
+        self.call_reset()
+        if result:
+            # The reply is already stored in the database, and we already
+            # updated the UI.
+            pass
+        else:
+            # TODO: Remove reply from database (put in storage.py)
+
+            # Redraw UI
+            self.gui.show_conversation_for(self.gui.current_source)
+
+            self.set_status("The reply failed to send. Please try again.")
+
+    def on_reply_timeout(self):
+        """
+        Indicate there's a timeout error in the status bar and rollback the
+        reply.
+        """
+        reply = self.api_runner.current_object
+        self.call_reset()
+        # TODO: Remove reply from database (put in storage.py)
+
+        # Redraw UI
+        self.gui.show_conversation_for(self.gui.current_source)
+
+        self.set_status("The connection to the server timed out.")

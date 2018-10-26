@@ -58,6 +58,7 @@ class Window(QMainWindow):
         self.main_view = MainView(self.widget)
         self.main_view.source_list.itemSelectionChanged.\
             connect(self.on_source_changed)
+        self.current_source = None
         widget_layout.addWidget(self.tool_bar, 1)
         widget_layout.addWidget(self.main_view, 6)
         self.setCentralWidget(self.widget)
@@ -141,7 +142,8 @@ class Window(QMainWindow):
         """
         source_item = self.main_view.source_list.currentItem()
         source_widget = self.main_view.source_list.itemWidget(source_item)
-        self.show_conversation_for(source_widget.source)
+        self.current_source = source_widget.source
+        self.show_conversation_for(self.current_source)
 
     def show_conversation_for(self, source):
         """
@@ -149,6 +151,7 @@ class Window(QMainWindow):
         """
         conversation = ConversationView(self)
         conversation.setup(self.controller)
+        conversation.source = source
         conversation.add_message('Source name: {}'.format(
                                  source.journalist_designation))
         conversation.add_message('Hello, hello, is this thing switched on?')
