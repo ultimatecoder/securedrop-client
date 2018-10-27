@@ -274,8 +274,6 @@ class Client(QObject):
             self.call_api(storage.get_remote_data, self.on_synced,
                           self.on_sync_timeout, self.api)
             logger.info("In sync_api, after call to call_api, I'm in thread {}".format(self.thread().currentThreadId()))
-        else:
-            logger.info("It looks like you are not authenticated. Weird, isn't it.")
 
     def last_sync(self):
         """
@@ -378,45 +376,3 @@ class Client(QObject):
         duration.
         """
         self.gui.set_status(message, duration)
-
-    def on_file_click(self, source_db_object, message):
-        """
-        Download the file associated with the associated message (which may
-        be a Submission or Reply).
-        """
-        if isinstance(message, models.Submission):
-            # Handle submissions.
-            func = self.api.download_submission
-            sdk_object = sdclientapi.Submission(uuid=message.uuid)
-            sdk_object.filename = message.filename
-            sdk_object.source_uuid = source_db_object.uuid
-        elif isinstance(message, models.Reply):
-            # Handle journalist's replies.
-            func = self.api.download_reply
-            sdk_object = sdclientapi.Reply(uuid=message.uuid)
-            sdk_object.filename = message.filename  # pragma: no cover
-            sdk_object.source_uuid = source_db_object.uuid  # pragma: no cover
-        self.call_api(func, self.on_file_download,
-                      self.on_download_timeout, sdk_object, self.data_dir)
-
-    def on_file_download(self, result, result_data):
-        """
-        Called when a file has downloaded. Cause a refresh to the conversation
-        view to display the contents of the new file.
-        """
-        sha256sum, filename = result_data
-
-        if result:
-            storage.mark_file_as_downloaded(os.path.basename(filename),
-                                            self.session)
-            # Refresh the conversation with the content of the downloaded file.
-        else:
-            # Update the UI in some way to indicate a failure state.
-            self.set_status("Failed to download file, please try again.")
-
-    def on_download_timeout(self):
-        """
-        Called when downloading a file has timed out.
-        """
-        # Update the status bar to indicate a failure state.
-        self.set_status("Connection to server timed out, please try again.")
